@@ -19,11 +19,13 @@ caveTrain :: IO ()
 caveTrain = do
   putStrLn "How many generations to train?"
   num <- fmap read getLine
+  putStrLn "How many max initial connections?"
+  numCons <- fmap read getLine
   putStrLn "Press Enter to continue."
   _ <- getLine
   seed <- randomIO
   let pop =
-        newPop seed (PS 150 10 5 defParams { recurrencies = True } smallParams { recurrencies = True } (Just 5))
+        newPop seed (PS 150 10 5 defParams { recurrencies = True } smallParams { recurrencies = True } (Just numCons))
   pop' <- caveLoop num pop
   printInfo pop'
   putStrLn "Push Enter to view genome."
