@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 {-
 Copyright (C) 2015 Leon Medvinsky
 
@@ -29,10 +30,8 @@ Portability : ghc
 
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
-module Neet.Examples.CAVE (cavePlay, gameFit, simGen) where
+module Neet.Examples.CAVE (cavePlay, gameFit, simGen, Pattern(..)) where
 
-
-import System.Random
 
 import Graphics.Gloss
 import Graphics.Gloss.Interface.Pure.Game
@@ -43,13 +42,11 @@ import Data.List (foldl', sortBy)
 
 import GHC.Float
 
+import Data.Maybe
+
 
 deg :: Float -> Float
 deg d = 2 * pi * d / 360
-
-
-maxBulV :: Float
-maxBulV = 1
 
 
 shootInterval :: Float
@@ -91,7 +88,7 @@ hitShip :: Ship -> Bullet -> Bool
 hitShip Ship{..} Bullet{..} = ((bullX - shipX)**2 + (bullY - shipY)**2) <= (bullR + shipR)**2
 
 
-hitBoss :: Boss -> Bullet -> Bool
+hitBoss :: Boss a -> Bullet -> Bool
 hitBoss Boss{..} Bullet{..} = ((bullX - bossX)**2 + (bullY - bossY)**2) <= (bullR + bossR)**2
 
 
@@ -100,34 +97,71 @@ data WavePattern =
               , wpInterval   :: Float
               , wpSpacing    :: Float
               , wpVel        :: Float
+              , wpDur        :: Float
               }
 
-
-randomPat :: RandomGen g => g -> (WavePattern, g)
-randomPat g = (WavePattern { wpStartAngle = sa
-                           , wpInterval = int
-                           , wpSpacing = space
-                           , wpVel = v
-                           }, g'''') 
-  where (sa, g') = randomR (0, 2 * pi) g
-        (bops, g'') = randomR (1, 5 :: Int) g'
-        int = 0.05 -- fromIntegral bops * 0.05
-        (space, g''') = randomR (deg 60, deg 360) g''
-        (v, g'''') = randomR (0, maxBulV) g'''
+newtype Pattern a = Pat { getPattern :: Float -> CaveGame a -> ([Bullet], Maybe (Pattern a))
+                        }
 
 
-patternDur :: Float
-patternDur = 3
+-- | Do patterns in sequence
+patSeries :: [Pattern a] -> Pattern a
+patSeries pats = Pat $ go pats
+  where go [] _ _ = ([],Nothing)
+        go (Pat f:ps) dt cg = case f dt cg of
+          (bs, Just newPat) -> (bs, Just . Pat $ go (newPat:ps))
+          (bs, Nothing    ) -> (bs, Just . Pat $ go ps)
 
 
-data Boss =
+-- | Do patterns in parallel
+patPara :: [Pattern a] -> Pattern a
+patPara = Pat . go
+  where go [] _ _ = ([], Nothing)
+        go ps dt cg = (bullets, fmap (Pat . go) newPats)
+          where res = map (\p -> getPattern p dt cg) ps
+                bullets = res >>= fst
+                newPats = case mapMaybe snd res of
+                  [] -> Nothing
+                  ps' -> Just ps'
+
+
+wavePattern :: WavePattern -> Pattern a
+wavePattern WavePattern{..} = Pat $ go wpDur wpInterval wpStartAngle
+  where go :: Float -> Float -> Float -> Float -> CaveGame a -> ([Bullet], Maybe (Pattern a))
+        go remTime intLeft aim dt CaveGame{ gameBoss = Boss{..}, gameShip = Ship{..} }
+          | remTime <= 0 = ([], Nothing)
+          | otherwise = (newBulls, Just . Pat $ go (remTime - dt) (newTimer) (aim + dt * wpSpacing))
+          where doShoot = intLeft <= 0
+                newTimer
+                  | doShoot = wpInterval
+                  | otherwise = intLeft - dt
+                newBulls
+                  | doShoot = [Bullet bossX bossY (cos aim * wpVel) (sin aim * wpVel) 0.02]
+                  | otherwise = []
+
+
+funPat :: Pattern a
+funPat = patPara [wavePattern wave1, wavePattern wave2]
+  where wave1 = WavePattern { wpStartAngle = 0
+                            , wpInterval = 0.05
+                            , wpSpacing = 2 * pi + 0.1
+                            , wpVel = 2
+                            , wpDur = 9999999999999
+                            }
+        wave2 = WavePattern { wpStartAngle = 0
+                            , wpInterval = 0.1
+                            , wpSpacing = 0.2 - pi
+                            , wpVel = 0.5
+                            , wpDur = 9999999999999
+                            } 
+
+
+
+data Boss a =
   Boss { bossX :: Float
        , bossY :: Float
        , bossR :: Float
-       , bossP :: !WavePattern
-       , bossAim :: !Float
-       , patTimer :: !Float
-       , intTimer :: !Float
+       , bossP :: Maybe (Pattern a)
        } 
 
 
@@ -151,12 +185,11 @@ data Score =
 -- | Parameter is controller type
 data CaveGame cont =
   CaveGame { gameShip :: !Ship
-           , gameBoss :: !Boss
+           , gameBoss :: !(Boss cont)
            , gameSBullets :: [Bullet]
            , gameBBullets :: [Bullet]
            , gameContState :: !cont
            , gameController :: Controller cont
-           , gameRand :: !StdGen
            , gameScore :: !Score
            } 
 
@@ -184,10 +217,9 @@ stepGame dt !cg@CaveGame{..} =
   CaveGame { gameShip = newShip
            , gameBoss = newBoss
            , gameSBullets = newSBulls
-           , gameBBullets = newBBullets
+           , gameBBullets = newBBulls ++ steppedBBullets
            , gameContState = newState
            , gameController = gameController
-           , gameRand = newGen
            , gameScore = newScore
            } 
   where (newState, cont) = control gameController gameContState cg
@@ -201,20 +233,12 @@ stepGame dt !cg@CaveGame{..} =
                        }
         spdMult = if cShoot cont then 0.3 else 1
         Boss{..} = gameBoss
-        bossShoot = intTimer <= 0
-        patDone = patTimer <= 0
-        (newPat, newGen) = if patDone then randomPat gameRand else (bossP, gameRand)
-        newBoss = if patDone
-                  then gameBoss { bossP = newPat
-                                , bossAim = wpStartAngle newPat
-                                , patTimer = patternDur
-                                , intTimer = wpInterval newPat
-                                }
-                  else gameBoss { bossP = bossP
-                                , bossAim = bossAim + dt * wpSpacing bossP
-                                , patTimer = patTimer - dt
-                                , intTimer = if bossShoot then wpInterval bossP else intTimer - dt
-                                }
+
+        (newBBulls, newPat) = case bossP of
+          Nothing -> ([], Nothing)
+          Just pat -> getPattern pat dt cg
+        
+        newBoss = gameBoss { bossP = newPat }
 
 
         outBounds :: Bullet -> Bool
@@ -227,7 +251,7 @@ stepGame dt !cg@CaveGame{..} =
         stepSBullet :: Bullet -> Either Int Bullet
         stepSBullet b@Bullet{..}
           | outBounds b        = Left 0
-          | hitBoss gameBoss b = Left $ 10 + round (5 * shipY)
+          | hitBoss gameBoss b = Left $ 10 * round (shipY + 1)
           | otherwise          = Right $ advanceBullet dt b
 
         (points, steppedSBulls) = sepEither stepSBullet gameSBullets
@@ -253,12 +277,6 @@ stepGame dt !cg@CaveGame{..} =
 
         gameOver = or maybeHits
 
-        newBSpd = wpVel bossP
-
-        newBBull = Bullet bossX bossY (cos bossAim * newBSpd) (sin bossAim * newBSpd) 0.02
-
-        newBBullets = if bossShoot then newBBull : steppedBBullets else steppedBBullets
-
         addPoints = sum points
 
         Score{..} = gameScore
@@ -282,7 +300,7 @@ drawShip :: Ship -> Picture
 drawShip Ship{..} = Color yellow (Scale screen screen (Translate shipX shipY (ThickCircle shipR shipR)))
 
 
-drawBoss :: Boss -> Picture
+drawBoss :: Boss a -> Picture
 drawBoss Boss{..} = Color red (Scale screen screen (Translate bossX bossY (ThickCircle bossR bossR)))
 
 
@@ -340,11 +358,9 @@ initGame initCont troller =
            , gameBBullets = []
            , gameContState = initCont
            , gameController = troller
-           , gameRand = gen
            , gameScore = Score 0 0
            } 
-  where initBoss = Boss 0 0.5 0.2 initPat (wpStartAngle initPat) patternDur (wpInterval initPat)
-        (initPat, gen) = randomPat (mkStdGen 420)
+  where initBoss = Boss 0 0.5 0.2 (Just funPat)
         initShip = Ship 0 (-0.5) 0.02 2 shootInterval
 
 
