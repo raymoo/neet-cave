@@ -193,12 +193,13 @@ stepGame dt !cg@CaveGame{..} =
   where (newState, cont) = control gameController gameContState cg
         Ship{..} = gameShip
         
-        newShip = Ship { shipX = bound (-1, 1) $ shipX + dt * (cX cont) * shipSpeed
-                       , shipY = bound (-1, 1) $ shipY + dt * (cY cont) * shipSpeed
+        newShip = Ship { shipX = bound (-1, 1) $ shipX + dt * (cX cont) * shipSpeed * spdMult
+                       , shipY = bound (-1, 1) $ shipY + dt * (cY cont) * shipSpeed * spdMult
                        , shipR = shipR
                        , shipSpeed = shipSpeed
                        , shipTimer = if shipTimer <= 0 then shootInterval else shipTimer - dt
                        }
+        spdMult = if cShoot cont then 0.3 else 1
         Boss{..} = gameBoss
         bossShoot = intTimer <= 0
         patDone = patTimer <= 0
