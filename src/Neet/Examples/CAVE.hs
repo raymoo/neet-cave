@@ -436,7 +436,7 @@ netCont = Controller go
 
 
 gameScorer :: Genome -> Score
-gameScorer g = stepGameN 1000 game
+gameScorer g = stepGameN 2000 game
   where net = mkPhenotype g
         game = initGame net netCont
 
