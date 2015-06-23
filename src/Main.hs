@@ -25,7 +25,7 @@ caveTrain = do
   _ <- getLine
   seed <- randomIO
   let pop =
-        newPop seed (PS 150 10 5 defParams { recurrencies = True } smallParams { recurrencies = True } (Just numCons))
+        newPop seed (PS 150 10 3 defParams { recurrencies = True } smallParams { recurrencies = True } (Just numCons))
   pop' <- caveLoop num pop
   printInfo pop'
   putStrLn "Push Enter to view genome."

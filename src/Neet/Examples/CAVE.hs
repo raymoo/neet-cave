@@ -39,7 +39,7 @@ import Graphics.Gloss.Interface.Pure.Game
 
 import Neet
 
-import Data.List (foldl')
+import Data.List (foldl', sortBy)
 
 import GHC.Float
 
@@ -413,17 +413,27 @@ concentration Ship{..} bs = buck2List (fromIntegral $ length bs) $ foldl' contOn
                 nw = not xPos && yPos
 
 
+nearestFour :: Ship -> [Bullet] -> [Float]
+nearestFour Ship{..} bs = close >>= toDubs
+  where bullDist Bullet{..} =
+          let xDiff = bullX - shipX
+              yDiff = bullY - shipY
+          in (xDiff, yDiff, xDiff**2 + yDiff**2)
+        close = take 4 . sortBy (\(_,_,d1) (_,_,d2) -> compare d1 d2) $ map bullDist bs
+        toDubs (xd, yd, _) = [xd,yd]
+
+
 makeInputs :: CaveGame a -> [Double]
-makeInputs CaveGame{..} = (map float2Double $ shipX : shipY : concentration gameShip gameBBullets)
+makeInputs CaveGame{..} = (map float2Double $ shipX : shipY : nearestFour gameShip gameBBullets)
   where Ship{..} = gameShip
 
 
 makeCont :: [Double] -> Control
-makeCont (up:down:left:right:z:_) = Control{..}
-  where upness = if up > 0.9 then 1 else 0
-        downness = if down > 0.9 then 1 else 0
-        leftness = if left > 0.9 then 1 else 0
-        rightness = if right > 0.9 then 1 else 0
+makeCont (horiz:vert:z:_) = Control{..}
+  where upness = if vert > 0.9 then 1 else 0
+        downness = if vert < 0.1 then 1 else 0
+        leftness = if horiz < 0.1 then 1 else 0
+        rightness = if horiz > 0.9 then 1 else 0
         cX = rightness - leftness
         cY = upness - downness
         cShoot = z > 0.9
