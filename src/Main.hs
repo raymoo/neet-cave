@@ -4,14 +4,21 @@ module Main where
 import Neet.Examples.CAVE
 import Neet
 import System.Random
+import Data.Serialize
+import qualified Data.ByteString as BS
 
 main :: IO ()
 main = do
-  putStrLn "Play (1), or Train (2) ?"
+  putStrLn "Play (1), Train (2), or Play with existing AI (3)?"
   ans <- getLine
   case ans of
    "1" -> cavePlay
    "2" -> caveTrain
+   "3" -> do
+     filecont <- BS.readFile "aigenome"
+     case decode filecont of
+      Left str -> putStrLn $ "error: " ++ str
+      Right org -> simGen (-1) org
    _   -> main
 
 
@@ -31,9 +38,19 @@ caveTrain = do
   putStrLn "Push Enter to view genome."
   _ <- getLine
   renderGenome (popBOrg pop')
-  putStrLn "Push Enter to watch the best AI play."
-  _ <- getLine
-  simGen (popGen pop') (popBOrg pop')
+  let simOrg = do
+        putStrLn "Push Enter to watch the best AI play."
+        _ <- getLine
+        simGen (popGen pop') (popBOrg pop')
+  putStrLn "Save AI to file? (y)es, or any other input to not save."
+  choice <- getLine
+  case choice of
+   "y" -> do
+     let encoded = encode (popBOrg pop')
+     BS.writeFile "aigenome" encoded
+     putStrLn "File output to ./aigenome"
+     simOrg
+   _ -> simOrg
 
 
 caveLoop :: Int -> Population -> IO Population
