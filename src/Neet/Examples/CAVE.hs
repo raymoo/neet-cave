@@ -92,7 +92,10 @@ hitShip Ship{..} Bullet{..} = (xDiff*xDiff + yDiff*yDiff) <= totalR*totalR
 
 
 hitBoss :: Boss a -> Bullet -> Bool
-hitBoss Boss{..} Bullet{..} = ((bullX - bossX)**2 + (bullY - bossY)**2) <= (bullR + bossR)**2
+hitBoss Boss{..} Bullet{..} = (xDiff*xDiff + yDiff*yDiff) <= totalR*totalR
+  where xDiff = bullX - bossX
+        yDiff = bullY - bossY
+        totalR = bullR + bossR
 
 
 data WavePattern =
@@ -424,7 +427,8 @@ concentration Ship{..} bs = buck2List (fromIntegral $ length bs) $ foldl' contOn
                 xBigger = abs xDiff > abs yDiff
                 xPos = yDiff >= 0
                 yPos = xDiff >= 0
-                dist = sqrt (xDiff**2 + yDiff**2) - shipR - bullR
+                dist = sqrt (xDiff*xDiff + yDiff*yDiff) - totalR*totalR
+                totalR = shipR + bullR
                 comp = 1 / (1 + dist)
                 ne = xPos && yPos
                 se = xPos && not yPos
