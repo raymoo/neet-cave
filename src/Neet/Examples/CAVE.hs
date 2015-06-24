@@ -85,7 +85,10 @@ advanceBullet dt b@Bullet{..} = b { bullX = bullX + dt * bullVx
 
 
 hitShip :: Ship -> Bullet -> Bool
-hitShip Ship{..} Bullet{..} = ((bullX - shipX)**2 + (bullY - shipY)**2) <= (bullR + shipR)**2
+hitShip Ship{..} Bullet{..} = (xDiff*xDiff + yDiff*yDiff) <= totalR*totalR
+  where xDiff = bullX - shipX
+        yDiff = bullY - shipY
+        totalR = bullR + shipR
 
 
 hitBoss :: Boss a -> Bullet -> Bool
@@ -251,7 +254,7 @@ stepGame dt !cg@CaveGame{..} =
         stepSBullet :: Bullet -> Either Int Bullet
         stepSBullet b@Bullet{..}
           | outBounds b        = Left 0
-          | hitBoss gameBoss b = Left $ 10 * round (shipY + 1)
+          | hitBoss gameBoss b = Left $ 9 * round (shipY + 1) + 1
           | otherwise          = Right $ advanceBullet dt b
 
         (points, steppedSBulls) = sepEither stepSBullet gameSBullets
@@ -314,7 +317,7 @@ drawGame CaveGame{..} = Pictures $ [sBulPic, shipPic, bBulPic, bossPic, scorePic
 
 
 drawScore :: Score -> Picture
-drawScore scr = Scale screen screen (Translate (-200) 200 (Text (show (scoreScore scr))))
+drawScore scr = Translate (-200) 200 (Text (show (scoreScore scr)))
 
 
 simGloss :: Float -> Either Score (CaveGame a) -> Either Score (CaveGame a)
@@ -430,12 +433,26 @@ concentration Ship{..} bs = buck2List (fromIntegral $ length bs) $ foldl' contOn
 
 
 nearestFour :: Ship -> [Bullet] -> [Float]
-nearestFour Ship{..} bs = close >>= toDubs
+nearestFour Ship{..} bs = padded >>= toDubs
   where bullDist Bullet{..} =
           let xDiff = bullX - shipX
               yDiff = bullY - shipY
-          in (xDiff, yDiff, xDiff**2 + yDiff**2)
-        close = take 4 . sortBy (\(_,_,d1) (_,_,d2) -> compare d1 d2) $ map bullDist bs
+          in (xDiff, yDiff, xDiff * xDiff + yDiff * yDiff )
+        dists = map bullDist bs
+        filtdists = filter (\(xd,yd,_) -> xd < 0.5 && yd < 0.5) $ dists
+        close = take 4 . sortBy (\(_,_,d1) (_,_,d2) -> compare d1 d2) $ usedDists
+
+        enoughClose = length filtdists >= 4
+
+        usedDists
+          | enoughClose = filtdists
+          | otherwise = dists
+
+        usedLength = length usedDists
+
+        padded
+          | enoughClose || usedLength == 4 = close
+          | otherwise = replicate (4 - usedLength) (0, 1,-1) ++ close
         toDubs (xd, yd, _) = [xd,yd]
 
 
