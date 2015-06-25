@@ -33,12 +33,14 @@ caveTrain = do
   putStrLn "Press Enter to continue."
   _ <- getLine
   seed <- randomIO
-  let mut = defMutParams { recurrencies = True }
-      mutS = defMutParamsS { recurrencies = True }
+  let mut = defMutParams { recurrencies = True, delConnChance = 0.3, delNodeChance = 0.03 }
+      mutS = defMutParamsS { recurrencies = True, delConnChance = 0.03 }
       dp = defDistParams { delta_t = 5 }
       sp = Target dp (SpeciesTarget (15,25) 0.1)
+      params = defParams { specParams = sp, mutParams = mut, mutParamsS = mutS }
+      pp = PhaseParams { phaseAddAmount = 10, phaseWaitTime = 5 }
       pop =
-        newPop seed (PS 150 10 3 defParams { specParams = sp, mutParams = mut, mutParamsS = mutS } (Just numCons))
+        newPop seed (PS 150 10 3 params (Just numCons) (Just pp))
   pop' <- caveLoop ticks num pop
   printInfo pop'
   putStrLn "Push Enter to view genome."
