@@ -482,8 +482,8 @@ netCont = Controller go
           where net' = stepNetwork net (makeInputs game)
 
 
-gameScorer :: Genome -> Score
-gameScorer g = stepGameN 2000 game
+gameScorer :: Int -> Genome -> Score
+gameScorer n g = stepGameN n game
   where net = mkPhenotype g
         game = initGame net netCont
 
@@ -497,8 +497,9 @@ toFitness :: Score -> Double
 toFitness Score{..} = fromIntegral scoreScore
 
 
-gameFit :: GenScorer Score
-gameFit = GS gameScorer toFitness (const False)
+-- | Parameter is how many steps to take
+gameFit :: Int -> GenScorer Score
+gameFit n = GS (gameScorer n) toFitness (const False)
 
 
 simGen :: Int -> Genome -> IO ()

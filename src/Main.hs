@@ -28,12 +28,18 @@ caveTrain = do
   num <- fmap read getLine
   putStrLn "How many max initial connections?"
   numCons <- fmap read getLine
+  putStrLn "How many steps to simulate? (50 steps = 1 seconds)"
+  ticks <- fmap read getLine
   putStrLn "Press Enter to continue."
   _ <- getLine
   seed <- randomIO
-  let pop =
-        newPop seed (PS 150 10 3 defParams { recurrencies = True } smallParams { recurrencies = True } (Just numCons))
-  pop' <- caveLoop num pop
+  let mut = defMutParams { recurrencies = True }
+      mutS = defMutParamsS { recurrencies = True }
+      dp = defDistParams { delta_t = 5 }
+      sp = Target dp (SpeciesTarget (15,25) 0.1)
+      pop =
+        newPop seed (PS 150 10 3 defParams { specParams = sp, mutParams = mut, mutParamsS = mutS } (Just numCons))
+  pop' <- caveLoop ticks num pop
   printInfo pop'
   putStrLn "Push Enter to view genome."
   _ <- getLine
@@ -53,13 +59,14 @@ caveTrain = do
    _ -> simOrg
 
 
-caveLoop :: Int -> Population -> IO Population
-caveLoop n pop
+-- | Two args are number of ticks and number of generations.
+caveLoop :: Int -> Int -> Population -> IO Population
+caveLoop ticks n pop
   | n <= 0 = return pop
   | otherwise = do
       printInfo pop
-      let (pop',_) = trainOnce gameFit pop
-      caveLoop (n - 1) pop'
+      let (pop',_) = trainOnce (gameFit ticks) pop
+      caveLoop ticks (n - 1) pop'
 
 
 
@@ -67,5 +74,7 @@ printInfo :: Population -> IO ()
 printInfo pop = do
   putStrLn $ "Generation " ++ show (popGen pop)
   putStrLn $ "Species: " ++ show (speciesCount pop)
+  putStrLn $ "Species Generated: " ++ (show . nextSpec $ pop)
   putStrLn $ "High Score: " ++ show (popBScore pop)
   putStrLn ""
+
