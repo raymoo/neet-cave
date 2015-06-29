@@ -67,7 +67,7 @@ caveLoop ticks n pop
   | n <= 0 = return pop
   | otherwise = do
       printInfo pop
-      let (pop',_) = trainOnce (gameFit ticks) pop
+      let pop' = trainPure (gameFit ticks) pop
       caveLoop ticks (n - 1) pop'
 
 
